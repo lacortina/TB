@@ -1,0 +1,2 @@
+# simbol  orbitales... s px py pz dxy dxz dyz dx2_y2 dr
+C s px py pz

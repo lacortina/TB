@@ -1,0 +1,25 @@
+# sk_params filtered by generate_and_filter_sk_improved.py
+# d_min_global = 1.42474  (Delta sera igual a esta distancia)
+# Eventos mantenidos (tipo, i, j, species, Rcombo (si aplica), distancia):
+# intra  i=0  j=2  species=('C', 'C')  dist=1.42474
+# inter  i=0  j=2  species=('C', 'C')  combo=(-1, -1, 0)  |R|=2.46772  dist=1.42474
+# inter  i=0  j=2  species=('C', 'C')  combo=(-1, 0, 0)  |R|=2.46772  dist=1.42474
+# intra  i=1  j=3  species=('C', 'C')  dist=1.42474
+# inter  i=1  j=3  species=('C', 'C')  combo=(-1, -1, 0)  |R|=2.46772  dist=1.42474
+# inter  i=1  j=3  species=('C', 'C')  combo=(0, -1, 0)  |R|=2.46772  dist=1.42474
+# intra  i=2  j=0  species=('C', 'C')  dist=1.42474
+# inter  i=2  j=0  species=('C', 'C')  combo=(1, 0, 0)  |R|=2.46772  dist=1.42474
+# inter  i=2  j=0  species=('C', 'C')  combo=(1, 1, 0)  |R|=2.46772  dist=1.42474
+# intra  i=3  j=1  species=('C', 'C')  dist=1.42474
+# inter  i=3  j=1  species=('C', 'C')  combo=(0, 1, 0)  |R|=2.46772  dist=1.42474
+# inter  i=3  j=1  species=('C', 'C')  combo=(1, 1, 0)  |R|=2.46772  dist=1.42474
+
+Delta 1.4247411965
+E_p_C 0.0
+E_s_C -8.370
+Vpp_pi_C_C -3.070
+Vpp_sigma_C_C 6.050
+Vsp_C_C 5.618
+Vss_C_C -5.729
+m 1.0
+tol 0.2
