@@ -546,6 +546,32 @@ def funcionslaterkoster(vector, orbital1, orbital2, Vss, Vsp, Vsds, Vpp_sigma, V
     else:
         return 0
 
+#funcion para asignar los valores
+import warnings
+
+def get_SK_param(SKdict, keyname, a, b):
+    """Buscar SKdict[keyname][(a,b)] o SKdict[keyname][(b,a)], devolver 0.0 si falta."""
+    try:
+        return SKdict[keyname][(a, b)]
+    except KeyError:
+        try:
+            return SKdict[keyname][(b, a)]
+        except KeyError:
+            # opcional: avisar una sola vez por combinación
+            warnings.warn(f"SK['{keyname}'] missing for {(a,b)} and {(b,a)} -> using 0.0", stacklevel=3)
+            return 0.0
+
+def get_Sol_param(Soldict, keyname, a, b):
+    """Análogo para el diccionario de solape."""
+    try:
+        return Soldict[keyname][(a, b)]
+    except KeyError:
+        try:
+            return Soldict[keyname][(b, a)]
+        except KeyError:
+            warnings.warn(f"Sol['{keyname}'] missing for {(a,b)} and {(b,a)} -> using 0.0", stacklevel=3)
+            return 0.0
+
 
 # ----------------------------
 # Ejemplo de uso
@@ -560,81 +586,9 @@ orbitals = {entry['symbol']: entry['orbitals'] for entry in orbitals}
 
 m, tol, Delta ,Onshell, SK = parse_param_file("sk_params.txt")  # (m, tol, Delta, species_params, flat_params)
 
-#Convertimos los onshell y los Sk para trabajar bien en el bucle
-# Construimos Onsite_final[symbol][orbital] = valor
-Onsite = {}
+_, _, _ ,_, Sol = parse_param_file("solape.txt")  # (m, tol, Delta, species_params, flat_params)
 
-for base_name, val_dict in Onshell.items():  # E_s, E_p, etc.
-    for species_tuple, val in val_dict.items():
-        sym = species_tuple[0]
-        if sym not in Onsite:
-            Onsite[sym] = {}
-        # mapa E_s → s, E_p → px, py, pz
-        if base_name.startswith("E_s"):
-            Onsite[sym]['s'] = val
-        elif base_name.startswith("E_p"):
-            for orb in ['px','py','pz']:
-                Onsite[sym][orb] = val
-        elif base_name.startswith("E_d"):
-            for orb in ['dxy','dxz','dyz','dx2_y2','dr']:
-                Onsite[sym][orb] = val
-        else:
-            # otros casos si aparecen
-            Onsite[sym][base_name] = val
-
-# Lista de todos los parámetros SK que queremos tener siempre
-ALL_SK_PARAMS = [
-    'Vddd', 'Vddp', 'Vdds',
-    'Vpdp', 'Vpds',
-    'Vpp_pi', 'Vpp_sigma',
-    'Vsds',
-    'Vsp', 'Vss'
-]
-
-# Construcción de SK_final
-SK_final = {}
-
-for base_name, val_dict in SK.items():  # Vpp_pi, Vsp, ...
-    for species_tuple, val in val_dict.items():  # ('C','C')
-        key = (species_tuple[0], species_tuple[1])
-
-        # Si el par no está, inicializamos todos los parámetros a 0
-        if key not in SK_final:
-            SK_final[key] = {param: 0.0 for param in ALL_SK_PARAMS}
-
-        # Sobrescribimos el parámetro que sí está en SK_raw
-        SK_final[key][base_name] = val
-
-# Trabajamos sobre una lista fija de claves para evitar modificar dict mientras iteramos
-original_keys = list(SK_final.keys())
-for (A, B) in original_keys:
-    params_ab = SK_final[(A, B)]
-    rev_key = (B, A)
-
-    if rev_key not in SK_final:
-        # crear entrada simétrica como copia (copia superficial suficiente: floats)
-        SK_final[rev_key] = params_ab.copy()
-    else:
-        # ya existe (B,A). debemos comprobar coherencia y unificar si difieren
-        params_ba = SK_final[rev_key]
-        diffs = []
-        for p in ALL_SK_PARAMS:
-            v_ab = params_ab.get(p, 0.0)
-            v_ba = params_ba.get(p, 0.0)
-            if not np.isclose(v_ab, v_ba, rtol=1e-6, atol=1e-12):
-                diffs.append((p, v_ab, v_ba))
-
-        if diffs:
-            # Avisar y unificar: aquí tomamos la media aritmética
-            print(f"Advertencia: discrepancias para pares {A,B} vs {B,A}. Unificando parámetros:")
-            for p, v_ab, v_ba in diffs:
-                mean = 0.5 * (v_ab + v_ba)
-                print(f"  parámetro {p}: {A,B}={v_ab:.6e}, {B,A}={v_ba:.6e} -> unificado a {mean:.6e}")
-                SK_final[(A,B)][p] = mean
-                SK_final[(B,A)][p] = mean
-
-# Ahora SK_final contiene ambos (A,B) y (B,A) con valores idénticos.
-
+#print(Sol)
 
 #conjunto de vectores vecinos
 Vecinos=generate_R_list_including_zero(cell)
@@ -674,11 +628,15 @@ f_evec.write(f"# eigenvectors: bloques por k; cada bloque comienza con '# k <ik>
 f_evec.write(f"# formato complejo por entrada: Re(+-)Imj (ej: 1.234567e-01+2.345678e-03j)\n")
 
 
+print(orbitals)
+
 for ik, kf in enumerate(kpoints_frac):
     k = kf[0]*B[0] + kf[1]*B[1] + kf[2]*B[2]
     #print(k)
     Ha = np.zeros((N,N), dtype=complex)
     HL = np.zeros((N,N), dtype=complex)
+    SA = np.zeros((N,N), dtype=complex)
+    SL = np.zeros((N,N), dtype=complex)
 
     for i in range(len(symbols)):
         sym1 = symbols[i]
@@ -690,38 +648,67 @@ for ik, kf in enumerate(kpoints_frac):
             sym2 = symbols[j]
             rj = positions[j]
             lenorb2=len(orbitals[sym2])
-            # Intentamos obtener los parámetros SK para (sym1,sym2).
-            sk = SK_final.get((sym1, sym2))
-            if sk is None:
-                # Intentamos la pareja invertida como alternativa (opcional).
-                sk = SK_final.get((sym2, sym1))
-            if sk is None:
-                # No existe la combinación de átomos en SK_final: saltamos a la siguiente j.
-                # Si quieres ver un aviso, descomenta la siguiente línea:
-                # print(f"SK missing for pair ({sym1},{sym2}), skipping")
-                continue
+            
+            
             for z in range(len(Vecinos)):
                 #Calculamos para cada vecino la distancia entre ellos
                 R = rj - ri + Vecinos[z]
                 dist = np.linalg.norm(R)
                 #aqui se mete la tension 
-                if dist > Delta + tol:
+                if abs(dist) > abs(Delta + tol):
                     continue
+                #print(R)
                 phase = np.exp(1j * np.dot(k, R)) #version atomic
                 phaseL = np.exp(1j * np.dot(k, Vecinos[z])) #version Latiice
                 for i_orb, orbital1 in enumerate(orbitals[sym1]):
                     for j_orb, orbital2 in enumerate(orbitals[sym2]):
                         if dist == 0 and orbital1 == orbital2:
-                            Ha[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onsite[sym1][orbital1]
-                            HL[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onsite[sym1][orbital1]
+                            #hacemos la diferencia entre s, p, d,
+                            if orbital1 == 's':
+                                Ha[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_s'][(sym1,)]
+                                HL[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_s'][(sym1,)]
+                            elif orbital1 == 'px' or orbital1 == 'py' or orbital1 == 'pz':
+                                Ha[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_p'][(sym1,)]
+                                HL[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_p'][(sym1,)]
+                            elif orbital1 == 'dxy' or orbital1 == 'dxz' or orbital1 == 'dyz' or orbital1 == 'dx2_y2' or orbital1 == 'dr':
+                                Ha[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_d'][(sym1,)]
+                                HL[lenorb1*i+i_orb,lenorb1*i+i_orb] = Onshell['E_d'][(sym1,)]
+                            #print(1, lenorb1*i+i_orb, lenorb2*j+j_orb)
+                            SL[lenorb1*i+i_orb,lenorb1*i+i_orb] = 1
+                            SA[lenorb1*i+i_orb,lenorb1*i+i_orb] = 1
 
                         else:
                             if dist == 0:
                                 continue
-                            Ha[lenorb1*i+i_orb,lenorb2*j+j_orb] += phase*funcionslaterkoster(R,orbital1, orbital2,SK_final[sym1,sym2]['Vss'],SK_final[sym1,sym2]['Vsp'],SK_final[sym1,sym2]['Vsds'],SK_final[sym1,sym2]['Vpp_sigma'],SK_final[sym1,sym2]['Vpp_pi'],SK_final[sym1,sym2]['Vpds'],SK_final[sym1,sym2]['Vpdp'],SK_final[sym1,sym2]['Vdds'],SK_final[sym1,sym2]['Vddp'],SK_final[sym1,sym2]['Vddd'])
-                            HL[lenorb1*i+i_orb,lenorb2*j+j_orb] += phaseL*funcionslaterkoster(R,orbital1, orbital2,SK_final[sym1,sym2]['Vss'],SK_final[sym1,sym2]['Vsp'],SK_final[sym1,sym2]['Vsds'],SK_final[sym1,sym2]['Vpp_sigma'],SK_final[sym1,sym2]['Vpp_pi'],SK_final[sym1,sym2]['Vpds'],SK_final[sym1,sym2]['Vpdp'],SK_final[sym1,sym2]['Vdds'],SK_final[sym1,sym2]['Vddp'],SK_final[sym1,sym2]['Vddd'])
-                            #Ha[lenorb2*j+j_orb,lenorb1*i+i_orb] += 
-                            #HL[lenorb2*j+j_orb,lenorb1*i+i_orb] += 
+                            Vss        = get_SK_param(SK,  'Vss',       sym1, sym2)
+                            Vpp_sigma  = get_SK_param(SK,  'Vpp_sigma', sym1, sym2)
+                            Vpp_pi     = get_SK_param(SK,  'Vpp_pi',    sym1, sym2)
+                            Vdds       = get_SK_param(SK,  'Vdds',      sym1, sym2)
+                            Vddp       = get_SK_param(SK,  'Vddp',      sym1, sym2)
+                            Vddd       = get_SK_param(SK,  'Vddd',      sym1, sym2)
+                            Vpds       = get_SK_param(SK,  'Vpds',      sym1, sym2)
+                            Vpdp       = get_SK_param(SK,  'Vpdp',      sym1, sym2)
+                            Vsp        = get_SK_param(SK,  'Vsp',       sym1, sym2)
+                            Vsds       = get_SK_param(SK,  'Vsds',      sym1, sym2)
+
+                            # solape
+                            Sss        = get_Sol_param(Sol, 'Vss',       sym1, sym2)
+                            Spp_sigma  = get_Sol_param(Sol, 'Vpp_sigma', sym1, sym2)
+                            Spp_pi     = get_Sol_param(Sol, 'Vpp_pi',    sym1, sym2)
+                            Sdds       = get_Sol_param(Sol, 'Vdds',      sym1, sym2)
+                            Sddp       = get_Sol_param(Sol, 'Vddp',      sym1, sym2)
+                            Sddd       = get_Sol_param(Sol, 'Vddd',      sym1, sym2)
+                            Spds       = get_Sol_param(Sol, 'Vpds',      sym1, sym2)
+                            Spdp       = get_Sol_param(Sol, 'Vpdp',      sym1, sym2)
+                            Ssp        = get_Sol_param(Sol, 'Vsp',       sym1, sym2)
+                            Ssds       = get_Sol_param(Sol, 'Vsds',      sym1, sym2)
+
+
+                            Ha[lenorb1*i+i_orb,lenorb2*j+j_orb] += phase*funcionslaterkoster(R,orbital1, orbital2, Vss, Vsp, Vsds, Vpp_sigma ,Vpp_pi ,Vpds , Vpdp ,Vdds ,Vddp ,Vddd)
+                            HL[lenorb1*i+i_orb,lenorb2*j+j_orb] += phaseL*funcionslaterkoster(R,orbital1, orbital2,Vss, Vsp, Vsds, Vpp_sigma ,Vpp_pi ,Vpds , Vpdp ,Vdds ,Vddp ,Vddd)
+                            SA[lenorb1*i+i_orb,lenorb2*j+j_orb] += phase* funcionslaterkoster(R,orbital1, orbital2, Vss, Vsp, Vsds, Spp_sigma ,Spp_pi ,Spds , Spdp ,Sdds ,Sddp ,Sddd)
+                            SL[lenorb1*i+i_orb,lenorb2*j+j_orb] += phaseL* funcionslaterkoster(R,orbital1, orbital2, Vss, Vsp, Vsds, Spp_sigma ,Spp_pi ,Spds , Spdp ,Sdds ,Sddp ,Sddd)  #Ha[lenorb2*j+j_orb,lenorb1*i+i_orb] += 
+                             
 
     eigenvaluesL, eigenvectorsL = np.linalg.eigh(HL)
     eigenvaluesA, eigenvectorsA = np.linalg.eigh(Ha)
@@ -747,7 +734,7 @@ for ik, kf in enumerate(kpoints_frac):
         vec = eigenvectorsA[:, n]  # vector columna de dimensión N
         line = " ".join(f"{v.real:.12e}{v.imag:+.12e}j" for v in vec)
         f_evec.write(line + "\n")
-
+    #print(R)
 # Cerrar ficheros al final
 f_eval.close()
 f_evec.close()

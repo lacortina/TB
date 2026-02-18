@@ -1,4 +1,4 @@
-# sk_params filtered by generate_and_filter_sk_improved.py
+# solape (SK) filtered by generate_and_filter_sk_improved_solape.py
 # d_min_global = 2.41693  (Delta sera igual a esta distancia)
 # Eventos mantenidos (tipo, i, j, species, Rcombo (si aplica), distancia):
 # inter  i=0  j=0  species=('Mo', 'Mo')  combo=(-1, -1, 0)  |R|=3.19032  dist=3.19032
@@ -8,14 +8,23 @@
 # inter  i=0  j=0  species=('Mo', 'Mo')  combo=(1, 0, 0)  |R|=3.19032  dist=3.19032
 # inter  i=0  j=0  species=('Mo', 'Mo')  combo=(1, 1, 0)  |R|=3.19032  dist=3.19032
 # intra  i=0  j=1  species=('Mo', 'S')  dist=2.41693
+# inter  i=0  j=1  species=('Mo', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=2.41693
 # inter  i=0  j=1  species=('Mo', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=2.41693
+# inter  i=0  j=1  species=('Mo', 'S')  combo=(-1, 1, 0)  |R|=5.52579  dist=2.41693
 # inter  i=0  j=1  species=('Mo', 'S')  combo=(0, 1, 0)  |R|=3.19032  dist=2.41693
+# inter  i=0  j=1  species=('Mo', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=2.41693
 # intra  i=0  j=2  species=('Mo', 'S')  dist=2.41693
+# inter  i=0  j=2  species=('Mo', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=2.41693
 # inter  i=0  j=2  species=('Mo', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=2.41693
+# inter  i=0  j=2  species=('Mo', 'S')  combo=(-1, 1, 0)  |R|=5.52579  dist=2.41693
 # inter  i=0  j=2  species=('Mo', 'S')  combo=(0, 1, 0)  |R|=3.19032  dist=2.41693
+# inter  i=0  j=2  species=('Mo', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=2.41693
 # intra  i=1  j=0  species=('Mo', 'S')  dist=2.41693
+# inter  i=1  j=0  species=('Mo', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=2.41693
 # inter  i=1  j=0  species=('Mo', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=2.41693
+# inter  i=1  j=0  species=('Mo', 'S')  combo=(1, -1, 0)  |R|=5.52579  dist=2.41693
 # inter  i=1  j=0  species=('Mo', 'S')  combo=(1, 0, 0)  |R|=3.19032  dist=2.41693
+# inter  i=1  j=0  species=('Mo', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=2.41693
 # inter  i=1  j=1  species=('S', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=3.19032
 # inter  i=1  j=1  species=('S', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=3.19032
 # inter  i=1  j=1  species=('S', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=3.19032
@@ -23,10 +32,25 @@
 # inter  i=1  j=1  species=('S', 'S')  combo=(1, 0, 0)  |R|=3.19032  dist=3.19032
 # inter  i=1  j=1  species=('S', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=3.19032
 # intra  i=1  j=2  species=('S', 'S')  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(0, 1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(1, 0, 0)  |R|=3.19032  dist=3.12977
+# inter  i=1  j=2  species=('S', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=3.12977
 # intra  i=2  j=0  species=('Mo', 'S')  dist=2.41693
+# inter  i=2  j=0  species=('Mo', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=2.41693
 # inter  i=2  j=0  species=('Mo', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=2.41693
+# inter  i=2  j=0  species=('Mo', 'S')  combo=(1, -1, 0)  |R|=5.52579  dist=2.41693
 # inter  i=2  j=0  species=('Mo', 'S')  combo=(1, 0, 0)  |R|=3.19032  dist=2.41693
+# inter  i=2  j=0  species=('Mo', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=2.41693
 # intra  i=2  j=1  species=('S', 'S')  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(0, 1, 0)  |R|=3.19032  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(1, 0, 0)  |R|=3.19032  dist=3.12977
+# inter  i=2  j=1  species=('S', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=3.12977
 # inter  i=2  j=2  species=('S', 'S')  combo=(-1, -1, 0)  |R|=3.19032  dist=3.19032
 # inter  i=2  j=2  species=('S', 'S')  combo=(-1, 0, 0)  |R|=3.19032  dist=3.19032
 # inter  i=2  j=2  species=('S', 'S')  combo=(0, -1, 0)  |R|=3.19032  dist=3.19032
@@ -35,14 +59,12 @@
 # inter  i=2  j=2  species=('S', 'S')  combo=(1, 1, 0)  |R|=3.19032  dist=3.19032
 
 Delta 2.4169335606029656
-E_d_Mo -0.004
-E_p_S -1.966
-Vddd_Mo_Mo 0.1008
-Vddp_Mo_Mo 0.0432
-Vdds_Mo_Mo 0.3602
-Vpdp_S_Mo 0.7739
-Vpds_S_Mo -2.8732
-Vpp_pi_S_S -0.1920
-Vpp_sigma_S_S 0.7132
+Vddd_Mo_Mo 0.031
+Vddp_Mo_Mo 0.011
+Vdds_Mo_Mo 0.110
+Vpdp_S_Mo 0.104
+Vpds_S_Mo 0.023
+Vpp_pi_S_S -0.19
+Vpp_sigma_S_S -0.064
 m 1.0
 tol 1

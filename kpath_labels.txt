@@ -1,0 +1,5 @@
+# label  index
+GAMMA  0
+M  20
+K  40
+GAMMA  60

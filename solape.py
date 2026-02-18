@@ -1,14 +1,13 @@
 #!/usr/bin/env python3
 """
-generate_and_filter_sk_improved.py
+generate_and_filter_sk_improved_solape.py
 
-Versión modificada de generate_and_filter_sk.py con búsqueda per-pair de la imagen mínima.
+Versión modificada de generate_and_filter_sk.py con:
+ - búsqueda per-pair de la imagen mínima (PBC),
+ - salida escrita en 'solape.txt' en lugar de 'sk_params.txt',
+ - NO incluye términos on-site (E_s_*, E_p_*, E_d_*) en la salida final.
 
-- Para cada par (i,j) se busca la imagen R que minimiza |r_i - (r_j + R)| (incluye R = 0).
-- A partir de esos mínimos por par se determina d_min_global y los eventos que cumplen
-  la condición dist <= FACTOR * d_min_global (con tolerancia numérica).
-
-Mantiene la estructura y ficheros de entrada/salida del script original.
+Mantiene la estructura y ficheros de entrada/salida del script original salvo esos cambios.
 """
 import os, sys
 import numpy as np
@@ -17,15 +16,15 @@ from collections import Counter, defaultdict
 import math
 
 # ---------------- Usuario puede cambiar esto --------------
-TOL = 1            # tolerancia numérica para comparaciones
+TOL = 2            # tolerancia numérica para comparaciones (ajusta según tus unidades)
 # -------------------------------------------------------------
 
 # nombres por defecto
 RED_FILE = "Red.txt"
 POS_FILE = "Posiciones.txt"
 ORB_FILE = "orbitales.txt"
-SK_FILE = "sk_params.txt"
-OUT_FILE = "sk_params.txt"
+SK_FILE = "sk_params.txt"   # archivo original de parámetros (si existe)
+OUT_FILE = "solape.txt"     # ahora escribimos solape.txt
 
 # Requisitos de tipos para parámetros Slater-Koster
 param_requires = {
@@ -49,12 +48,10 @@ def generate_R_list_up_to_cutoff(lattice, cutoff, max_shell=6):
     barrido en n1,n2,n3 hasta un número de 'shells' razonable.
     Devuelve (R_list, combos).
     """
-    # norma mínima de los vectores de red para estimar rango
     vec_norms = np.linalg.norm(lattice, axis=1)
     min_vec = vec_norms.min()
-    # número estimado de imágenes necesarias por dirección
     N = int(math.ceil(cutoff / min_vec)) + 1
-    N = min(N, max_shell)   # límite para evitar explosión; ajusta max_shell si necesitas más
+    N = min(N, max_shell)
     R_list = []
     combos = []
     for n1 in range(-N, N+1):
@@ -64,7 +61,6 @@ def generate_R_list_up_to_cutoff(lattice, cutoff, max_shell=6):
                 if np.linalg.norm(R) <= cutoff + 1e-12:
                     R_list.append(R)
                     combos.append((n1, n2, n3))
-    # asegurarse que R=0 esté presente y sea la primera entrada (útil para priorizar intra)
     zero_idx = None
     for idx,R in enumerate(R_list):
         if np.linalg.norm(R) < 1e-12:
@@ -74,7 +70,6 @@ def generate_R_list_up_to_cutoff(lattice, cutoff, max_shell=6):
         R_list.insert(0, np.zeros(3))
         combos.insert(0, (0,0,0))
     elif zero_idx != 0:
-        # mover cero al principio
         R0 = R_list.pop(zero_idx)
         c0 = combos.pop(zero_idx)
         R_list.insert(0, R0)
@@ -92,7 +87,7 @@ def read_lattice(fn):
             vecs.append([float(parts[0]), float(parts[1]), float(parts[2])])
     if len(vecs) < 3:
         raise RuntimeError(f"{fn} debe contener al menos 3 vectores (filas con 3 floats).")
-    return np.array(vecs[:3], dtype=float)   # filas a1,a2,a3
+    return np.array(vecs[:3], dtype=float)
 
 def read_positions_cartesian(fn):
     pos = []
@@ -138,6 +133,7 @@ def read_sk_params(fn):
     return params
 
 # ----------------- utilitarios orbitales / parametros ----------
+
 def orbital_types_from_list(orb_list):
     tset = set()
     for orb in orb_list:
@@ -149,14 +145,7 @@ def orbital_types_from_list(orb_list):
 
 def generate_possible_params(types_list, orb_map):
     """
-    Genera todas las claves posibles:
-      - Onsite: E_s_X, E_p_X, E_d_X
-      - Pares:
-          * si el par de orbitales requerido es del mismo tipo (req1 == req2)
-            => generar UNA clave simétrica V.._{sorted(A,B)} (ej. Vss_Mo_S)
-          * si son distintos (req1 != req2)
-            => generar claves direccionales V.._{A}_{B} cuando req1 está en A y req2 en B.
-            (si A != B también se considera la posibilidad invertida en la otra dirección)
+    Genera todas las claves posibles (incluye onsite y pares).
     """
     params = set()
     params.update(["Delta", "m", "tol"])
@@ -181,28 +170,25 @@ def generate_possible_params(types_list, orb_map):
                 continue
 
             for pname, (req1, req2) in param_requires.items():
-                # Caso: mismo tipo de orbital (ej. s-s, p-p, d-d)
                 if req1 == req2:
                     if req1 in la and req2 in lb:
                         pk = "_".join(sorted([A, B]))
                         params.add(f"{pname}_{pk}")
                 else:
-                    # Caso: orbitales distintos -> generar direccional (A -> B) si aplica
                     if req1 in la and req2 in lb:
                         params.add(f"{pname}_{A}_{B}")
-                    # Si A != B, considerar también la posibilidad invertida (B -> A)
-                    # (siempre con la misma nomenclatura pname_{X}_{Y})
                     if A != B and req2 in la and req1 in lb:
                         params.add(f"{pname}_{A}_{B}")
 
     return params
 
 # ----------------- búsqueda por imagen mínima (PBC) ------------
+EPS_ZERO = 1e-12  # umbral para considerar una distancia = 0
+
 def generate_R_list_including_zero(lattice, coeffs=(-1,0,1)):
     """Genera lista de vectores R y combinaciones (n1,n2,n3) incluyendo la imagen 0."""
     R_list = []
     combos = []
-    # incluir R = (0,0,0) como primera entrada
     R_list.append(np.zeros(3, dtype=float))
     combos.append((0,0,0))
     for n1 in coeffs:
@@ -211,14 +197,9 @@ def generate_R_list_including_zero(lattice, coeffs=(-1,0,1)):
                 if n1 == 0 and n2 == 0 and n3 == 0:
                     continue
                 R = n1*lattice[0] + n2*lattice[1] + n3*lattice[2]
-                # Evitar R que son (prácticamente) el vector nulo
                 R_list.append(R)
                 combos.append((n1,n2,n3))
     return R_list, combos
-
-
-# ----------------- búsqueda por imagen mínima (PBC) ------------
-EPS_ZERO = 1e-12  # umbral para considerar una distancia = 0
 
 def nearest_image_events(cart_positions, symbols, lattice, coeffs=None,
                          cutoff=None, include_self_images=True):
@@ -252,11 +233,9 @@ def nearest_image_events(cart_positions, symbols, lattice, coeffs=None,
 
             for k, R in enumerate(R_list):
                 # Si es exactamente la misma celda y la misma imagen R=0, ignorar:
-                # eso produciría distancia cero y no debe considerarse enlace.
                 if i == j and np.linalg.norm(R) <= EPS_ZERO:
                     continue
 
-                # distancia a la imagen j+R
                 dvec = cart_positions[i] - (cart_positions[j] + R)
                 d = np.linalg.norm(dvec)
 
@@ -279,7 +258,6 @@ def nearest_image_events(cart_positions, symbols, lattice, coeffs=None,
             elif abs(best_d_pair - dmin_i) <= TOL:
                 best_partners.append((j, best_k, best_d_pair))
 
-        # guardar eventos para el átomo i
         for (j, klist, best_d_for_pair) in best_partners:
             for k in klist:
                 R = R_list[k]
@@ -303,22 +281,21 @@ def nearest_image_events(cart_positions, symbols, lattice, coeffs=None,
 def filter_events_by_factor(events):
     """
     - calcula d_global = min(ev.dist)
-    - devuelve lista de eventos cuyo ev.dist <= factor * d_global (señalando tolerancia)
+    - devuelve lista de eventos cuyo ev.dist <= d_global + TOL (señalando tolerancia)
     - tambien devuelve d_global y la lista completa para reporte
     """
     if not events:
         return [], None, events
     dists = np.array([ev['dist'] for ev in events])
     d_global = float(np.min(dists))
-    # condición con tolerancia para evitar perder empates numéricos
     kept = [ev for ev in events if ev['dist'] <= d_global + TOL]
     return kept, d_global, events
 
 # ----------------- determinar parametros a mantener ----------------
 def params_from_kept_events(kept_events, orb_map):
     """
-    Determina qué parámetros mantener a partir de los eventos filtrados,
-    aplicando la misma regla de simetría para req1 == req2.
+    Determina qué parámetros mantener a partir de los eventos filtrados.
+    IMPORTANTE: NO incluirá términos on-site (E_s_*, E_p_*, E_d_*).
     Devuelve (keep_set, species_pairs).
     """
     species_pairs = set(ev['species'] for ev in kept_events)
@@ -332,16 +309,8 @@ def params_from_kept_events(kept_events, orb_map):
     orb_types = {s: orbital_types_from_list(orb_map.get(s, [])) for s in species_flat}
 
     keep = set()
+    # siempre conservar claves globales
     keep.update(['Delta', 'm', 'tol'])
-
-    # Onsite
-    for s, tset in orb_types.items():
-        if 's' in tset:
-            keep.add(f"E_s_{s}")
-        if 'p' in tset:
-            keep.add(f"E_p_{s}")
-        if 'd' in tset:
-            keep.add(f"E_d_{s}")
 
     # Pares a mantener (aplicando simetría cuando req1 == req2)
     for (A, B) in species_pairs:
@@ -349,7 +318,7 @@ def params_from_kept_events(kept_events, orb_map):
         types_B = orb_types.get(B, set())
 
         for pname, (req1, req2) in param_requires.items():
-            # mismo tipo de orbital -> clave simétrica única
+            # mismo tipo de orbital -> clave simétrica única (si aplica)
             if req1 == req2:
                 if req1 in types_A and req2 in types_B:
                     pk = "_".join(sorted([A, B]))
@@ -364,10 +333,10 @@ def params_from_kept_events(kept_events, orb_map):
 
     return keep, species_pairs
 
-# ----------------- escritura fichero final ----------------
+# ----------------- escritura fichero final (sin onsite) ----------------
 def write_sk_filtered(outfile, keep_keys, sk_original, d_global, kept_events):
     with open(outfile, 'w') as f:
-        f.write("# sk_params filtered by generate_and_filter_sk_improved.py\n")
+        f.write("# solape (SK) filtered by generate_and_filter_sk_improved_solape.py\n")
         f.write("# d_min_global = %g  (Delta sera igual a esta distancia)\n" % d_global)
         f.write("# Eventos mantenidos (tipo, i, j, species, Rcombo (si aplica), distancia):\n")
         for ev in kept_events:
@@ -379,6 +348,10 @@ def write_sk_filtered(outfile, keep_keys, sk_original, d_global, kept_events):
         f.write("\n")
         # escribir claves en orden alfabetico. Delta = d_global; mantener valores originales si existian.
         for key in sorted(keep_keys):
+            # OMITIR términos on-site que empiecen por E_s_, E_p_, E_d_
+            if key.startswith("E_s_") or key.startswith("E_p_") or key.startswith("E_d_"):
+                # saltar on-site
+                continue
             if key == "Delta":
                 f.write(f"Delta {d_global}\n")
             elif key in sk_original:
@@ -390,11 +363,11 @@ def write_sk_filtered(outfile, keep_keys, sk_original, d_global, kept_events):
                     f.write("tol 1e-2\n")
                 else:
                     f.write(f"{key} 0.0\n")
-    print(f"Wrote filtered SK to {outfile}")
+    print(f"Wrote filtered solape to {outfile}")
 
 # ----------------- MAIN ----------------
 def main(argv):
-    global RED_FILE, POS_FILE, ORB_FILE, SK_FILE, OUT_FILE, FACTOR
+    global RED_FILE, POS_FILE, ORB_FILE, SK_FILE, OUT_FILE, TOL
     if len(argv) >= 2:
         RED_FILE = argv[1]
     if len(argv) >= 3:
@@ -427,12 +400,14 @@ def main(argv):
     possible_keys = generate_possible_params(species_types, orb_map)
 
     # calcular eventos (búsqueda per-pair de la imagen minima)
+    # incluir imagenes self (i == j con R != 0) para detectar enlaces i <-> i+R
     all_events = nearest_image_events(cart, symbols, lattice, coeffs=(-1,0,1), include_self_images=True)
+
     if not all_events:
         print("No se detectaron eventos (distancias). No se genera fichero.")
         return
 
-    # filtrado por FACTOR * d_min_global
+    # filtrado por FACTOR * d_min_global (aqui FACTOR implícito = 1, usamos d_global + TOL)
     kept_events, d_global, full_events = filter_events_by_factor(all_events)
     if d_global is None:
         print("Error: no hay distancias.")
@@ -441,8 +416,11 @@ def main(argv):
     print(f"Distancia global minima (d_min_global) = {d_global:.12f}")
     print(f"Eventos totales: {len(all_events)}. Eventos mantenidos tras filtro: {len(kept_events)}")
 
-    # determinar parametros a mantener
+    # determinar parametros a mantener (sin onsite)
     keep_keys, species_pairs = params_from_kept_events(kept_events, orb_map)
+
+    # Asegurar que Delta/m/tol estén presentes
+    keep_keys.update(["Delta","m","tol"])
 
     # Si no quedo ninguno, avisar
     if not keep_keys:
@@ -458,6 +436,8 @@ def main(argv):
         print("  ", p)
     print("\nClaves SK mantenidas (ejemplos):")
     for k in sorted(list(keep_keys))[:50]:
+        if k.startswith("E_s_") or k.startswith("E_p_") or k.startswith("E_d_"):
+            continue
         print("  ", k)
     print("\nHecho.")
 
